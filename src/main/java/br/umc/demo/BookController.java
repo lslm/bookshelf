@@ -1,5 +1,8 @@
 package br.umc.demo;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -19,52 +22,52 @@ public class BookController {
 
     // GET /api/books
     @GetMapping
-    public List<Book> listAll() {
-        return books;
+    public ResponseEntity<List<Book>> listAll() {
+        return new ResponseEntity<>(books, HttpStatus.OK);
     }
 
     // GET /api/books/{id}
     @GetMapping("/{id}")
-    public Book findById(@PathVariable Long id) {
+    public ResponseEntity<Book> findById(@PathVariable Long id) {
         for (Book book : books) {
             if (book.getId().equals(id)) {
-                return book;
+                return new ResponseEntity<>(book, HttpStatus.OK);
             }
         }
-        return null;
+        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
     }
 
     // POST /api/books
     @PostMapping
-    public Book create(@RequestBody Book newBook) {
+    public ResponseEntity<Book> create(@RequestBody Book newBook) {
         newBook.setId((long) books.size() +1);
         books.add(newBook);
-        return newBook;
+        return new ResponseEntity<>(newBook, HttpStatus.CREATED);
     }
 
     // PUT /api/books/{id}
     @PutMapping("/{id}")
-    public Book update(@PathVariable Long id, @RequestBody Book updatedBook) {
+    public ResponseEntity<Book> update(@PathVariable Long id, @RequestBody Book updatedBook) {
         for (Book book : books) {
             if (book.getId().equals(id)) {
                 book.setTitle(updatedBook.getTitle());
                 book.setAuthor(updatedBook.getAuthor());
                 book.setYear(updatedBook.getYear());
-                return book;
+                return new ResponseEntity<>(book, HttpStatus.CREATED);
             }
         }
-        return null;
+        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
     }
 
     // DELETE /api/books/{id}
     @DeleteMapping("/{id}")
-    public String delete(@PathVariable Long id) {
+    public ResponseEntity delete(@PathVariable Long id) {
         for (Book book : books) {
             if (book.getId().equals(id)) {
                 books.remove(book);
-                return "Livro com id " + id + " removido com sucesso.";
+                return new ResponseEntity(HttpStatus.NO_CONTENT);
             }
         }
-        return "Livro com id " + id + " não encontrado.";
+        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
     }
 }
