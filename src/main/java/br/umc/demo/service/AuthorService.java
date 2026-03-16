@@ -35,6 +35,26 @@ public class AuthorService {
                 .toList();
     }
 
+    public AuthorResponse getAuthor(Long id) {
+        Author author = authorRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Autor não encontrado"));
+        return toResponse(author);
+    }
+
+    public AuthorResponse updateAuthor(Long id, AuthorRequest request) {
+        Author author = authorRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Autor não encontrado"));
+        author.setName(request.getName());
+        return toResponse(authorRepository.save(author));
+    }
+
+    public void deleteAuthor(Long id) {
+        if (!authorRepository.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Autor não encontrado");
+        }
+        authorRepository.deleteById(id);
+    }
+
     public List<BookResponse> listBooksByAuthor(Long authorId) {
         if (!authorRepository.existsById(authorId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Autor não encontrado");

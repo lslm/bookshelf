@@ -65,6 +65,55 @@ GET /api/authors
 
 ---
 
+#### Buscar autor por ID
+
+```
+GET /api/authors/{id}
+```
+
+**Resposta** `200 OK`:
+```json
+{ "id": 1, "name": "Robert C. Martin" }
+```
+
+**Resposta** `404 Not Found` — quando o autor não existe.
+
+---
+
+#### Atualizar autor
+
+```
+PUT /api/authors/{id}
+```
+
+**Body:**
+```json
+{
+  "name": "Robert Cecil Martin"
+}
+```
+
+**Resposta** `200 OK`:
+```json
+{ "id": 1, "name": "Robert Cecil Martin" }
+```
+
+**Resposta** `404 Not Found` — quando o autor não existe.
+
+---
+
+#### Remover autor
+
+```
+DELETE /api/authors/{id}
+```
+
+**Resposta** `204 No Content` — remoção bem-sucedida (sem corpo).
+
+**Resposta** `404 Not Found` — quando o autor não existe.
+
+---
+
 #### Listar livros de um autor
 
 ```
@@ -217,6 +266,9 @@ DELETE /api/books/{id}
 |----------|----------------------------|----------------------------------|
 | `POST`   | `/api/authors`             | Cadastrar autor                  |
 | `GET`    | `/api/authors`             | Listar todos os autores          |
+| `GET`    | `/api/authors/{id}`        | Buscar autor por ID              |
+| `PUT`    | `/api/authors/{id}`        | Atualizar autor                  |
+| `DELETE` | `/api/authors/{id}`        | Remover autor                    |
 | `GET`    | `/api/authors/{id}/books`  | Listar livros de um autor        |
 | `POST`   | `/api/books`               | Cadastrar livro                  |
 | `GET`    | `/api/books/{id}`          | Ver detalhes de um livro         |
