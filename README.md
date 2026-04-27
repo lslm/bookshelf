@@ -6,6 +6,7 @@ API RESTful para gerenciamento do acervo de livros da biblioteca da UMC.
 
 - Java 17
 - Spring Boot 4
+- Spring Security (JWT, Argon2)
 - Spring Data JPA
 - H2 (banco em memória)
 
@@ -22,40 +23,176 @@ O console do banco H2 fica disponível em `http://localhost:8080/h2-console`
 
 ---
 
-## Endpoints
+## Segurança
 
-### Autores
+### Autenticação vs Autorização
 
-#### Cadastrar autor
+| Conceito | O que é | Como funciona aqui |
+|---|---|---|
+| **Autenticação** | Verificar *quem* é o usuário | Login com email/senha → gera token JWT |
+| **Autorização** | Verificar *o que* o usuário pode fazer | Token carrega a role → Spring Security verifica permissões por rota |
+
+### Por que Argon2 para senhas?
+
+Senhas **nunca** são armazenadas em texto puro. São transformadas em hash irreversível usando **Argon2**:
+
+- **Não use MD5 ou SHA-256 para senhas**: são hashes rápidos. Uma GPU moderna calcula bilhões de SHA-256 por segundo, tornando ataques de força bruta viáveis.
+- **Argon2 é memory-hard**: exige muita memória para ser calculado. Ataques com GPU ou ASIC ficam proibitivamente caros.
+- **Venceu o Password Hashing Competition (2015)** — recomendado pelo OWASP.
+
+### Roles
+
+| Role | Permissões |
+|---|---|
+| `USER` | Leitura (listar livros e autores) |
+| `ADMIN` | Leitura + escrita (criar, editar, deletar) |
+
+---
+
+## Usuário Admin para Aula
+
+> **ATENÇÃO**: Use apenas em desenvolvimento. Nunca em produção.
 
 ```
-POST /api/authors
-```
-
-**Body:**
-```json
-{
-  "name": "Robert C. Martin"
-}
-```
-
-**Resposta** `201 Created`:
-```json
-{
-  "id": 1,
-  "name": "Robert C. Martin"
-}
+Email: admin@biblioteca.com
+Senha: Admin@123
 ```
 
 ---
+
+## Fluxo de Autenticação
+
+### 1. Registrar usuário
+
+```bash
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fullName": "Ana Paula",
+    "email": "ana@email.com",
+    "phone": "11999991234",
+    "password": "Minha@Senha123"
+  }'
+```
+
+Resposta `201 Created`:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "email": "ana@email.com",
+  "role": "USER"
+}
+```
+
+### 2. Login
+
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "ana@email.com",
+    "password": "Minha@Senha123"
+  }'
+```
+
+### 3. Usar o token
+
+Inclua o token em todas as requisições protegidas:
+
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
+```
+
+### 4. Exemplo: listar livros (USER ou ADMIN)
+
+```bash
+curl http://localhost:8080/api/books \
+  -H "Authorization: Bearer <token>"
+```
+
+### 5. Exemplo: criar livro (somente ADMIN)
+
+```bash
+curl -X POST http://localhost:8080/api/books \
+  -H "Authorization: Bearer <token-admin>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Clean Code",
+    "authorIds": [1],
+    "publisher": "Prentice Hall",
+    "isbn": "9780132350884",
+    "summary": "Guia de boas práticas de programação."
+  }'
+```
+
+---
+
+## Endpoints
+
+### Públicos (sem autenticação)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/api/auth/register` | Registra novo usuário |
+| `POST` | `/api/auth/login` | Login e geração de token JWT |
+
+### Requerem autenticação (ADMIN ou USER)
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/api/books` | Listar todos os livros |
+| `GET` | `/api/books/{id}` | Ver detalhes de um livro |
+| `GET` | `/api/authors` | Listar todos os autores |
+| `GET` | `/api/authors/{id}` | Buscar autor por ID |
+| `GET` | `/api/authors/{id}/books` | Listar livros de um autor |
+
+### Requerem ADMIN
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/api/authors` | Cadastrar autor |
+| `PUT` | `/api/authors/{id}` | Atualizar autor |
+| `DELETE` | `/api/authors/{id}` | Remover autor |
+| `POST` | `/api/books` | Cadastrar livro |
+| `PUT` | `/api/books/{id}` | Alterar livro |
+| `DELETE` | `/api/books/{id}` | Remover livro |
+
+### Respostas de erro
+
+| Código | Significado |
+|---|---|
+| `401 Unauthorized` | Token ausente, inválido ou expirado |
+| `403 Forbidden` | Token válido, mas role insuficiente |
+| `409 Conflict` | Email já cadastrado |
+
+---
+
+## Autores
+
+#### Cadastrar autor (ADMIN)
+
+```
+POST /api/authors
+Authorization: Bearer <token-admin>
+```
+
+```json
+{ "name": "Robert C. Martin" }
+```
+
+Resposta `201 Created`:
+```json
+{ "id": 1, "name": "Robert C. Martin" }
+```
 
 #### Listar todos os autores
 
 ```
 GET /api/authors
+Authorization: Bearer <token>
 ```
 
-**Resposta** `200 OK`:
+Resposta `200 OK`:
 ```json
 [
   { "id": 1, "name": "Robert C. Martin" },
@@ -63,72 +200,54 @@ GET /api/authors
 ]
 ```
 
----
-
 #### Buscar autor por ID
 
 ```
 GET /api/authors/{id}
+Authorization: Bearer <token>
 ```
 
-**Resposta** `200 OK`:
-```json
-{ "id": 1, "name": "Robert C. Martin" }
-```
-
-**Resposta** `404 Not Found` — quando o autor não existe.
-
----
-
-#### Atualizar autor
+#### Atualizar autor (ADMIN)
 
 ```
 PUT /api/authors/{id}
+Authorization: Bearer <token-admin>
 ```
 
-**Body:**
-```json
-{
-  "name": "Robert Cecil Martin"
-}
-```
-
-**Resposta** `200 OK`:
-```json
-{ "id": 1, "name": "Robert Cecil Martin" }
-```
-
-**Resposta** `404 Not Found` — quando o autor não existe.
-
----
-
-#### Remover autor
+#### Remover autor (ADMIN)
 
 ```
 DELETE /api/authors/{id}
+Authorization: Bearer <token-admin>
 ```
 
-**Resposta** `204 No Content` — remoção bem-sucedida (sem corpo).
-
-**Resposta** `404 Not Found` — quando o autor não existe.
-
----
+Resposta `204 No Content`.
 
 #### Listar livros de um autor
 
 ```
 GET /api/authors/{id}/books
+Authorization: Bearer <token>
 ```
 
-**Resposta** `200 OK`:
+---
+
+## Livros
+
+#### Listar todos os livros
+
+```
+GET /api/books
+Authorization: Bearer <token>
+```
+
+Resposta `200 OK`:
 ```json
 [
   {
     "id": 1,
     "title": "Clean Code",
-    "authors": [
-      { "id": 1, "name": "Robert C. Martin" }
-    ],
+    "authors": [{ "id": 1, "name": "Robert C. Martin" }],
     "publisher": "Prentice Hall",
     "isbn": "9780132350884",
     "summary": "Guia de boas práticas de programação."
@@ -136,26 +255,13 @@ GET /api/authors/{id}/books
 ]
 ```
 
-**Resposta** `404 Not Found` — quando o autor não existe:
-```json
-{
-  "status": 404,
-  "error": "Not Found",
-  "message": "Autor não encontrado"
-}
-```
-
----
-
-### Livros
-
-#### Cadastrar livro
+#### Cadastrar livro (ADMIN)
 
 ```
 POST /api/books
+Authorization: Bearer <token-admin>
 ```
 
-**Body:**
 ```json
 {
   "title": "Clean Code",
@@ -166,111 +272,27 @@ POST /api/books
 }
 ```
 
-**Resposta** `201 Created`:
-```json
-{
-  "id": 1,
-  "title": "Clean Code",
-  "authors": [
-    { "id": 1, "name": "Robert C. Martin" }
-  ],
-  "publisher": "Prentice Hall",
-  "isbn": "9780132350884",
-  "summary": "Guia de boas práticas de programação para escrever código limpo e de fácil manutenção."
-}
-```
-
----
+Resposta `201 Created`.
 
 #### Ver detalhes de um livro
 
 ```
 GET /api/books/{id}
+Authorization: Bearer <token>
 ```
 
-**Resposta** `200 OK`:
-```json
-{
-  "id": 1,
-  "title": "Clean Code",
-  "authors": [
-    { "id": 1, "name": "Robert C. Martin" }
-  ],
-  "publisher": "Prentice Hall",
-  "isbn": "9780132350884",
-  "summary": "Guia de boas práticas de programação para escrever código limpo e de fácil manutenção."
-}
-```
-
-**Resposta** `404 Not Found` — quando o livro não existe:
-```json
-{
-  "status": 404,
-  "error": "Not Found",
-  "message": "Livro não encontrado"
-}
-```
-
----
-
-#### Alterar informações de um livro
+#### Alterar livro (ADMIN)
 
 ```
 PUT /api/books/{id}
+Authorization: Bearer <token-admin>
 ```
 
-**Body** (todos os campos podem ser alterados):
-```json
-{
-  "title": "Clean Code: A Handbook of Agile Software Craftsmanship",
-  "authorIds": [1],
-  "publisher": "Prentice Hall",
-  "isbn": "9780132350884",
-  "summary": "Descrição atualizada do livro."
-}
-```
-
-**Resposta** `200 OK`:
-```json
-{
-  "id": 1,
-  "title": "Clean Code: A Handbook of Agile Software Craftsmanship",
-  "authors": [
-    { "id": 1, "name": "Robert C. Martin" }
-  ],
-  "publisher": "Prentice Hall",
-  "isbn": "9780132350884",
-  "summary": "Descrição atualizada do livro."
-}
-```
-
-**Resposta** `404 Not Found` — quando o livro não existe.
-
----
-
-#### Remover um livro
+#### Remover livro (ADMIN)
 
 ```
 DELETE /api/books/{id}
+Authorization: Bearer <token-admin>
 ```
 
-**Resposta** `204 No Content` — remoção bem-sucedida (sem corpo).
-
-**Resposta** `404 Not Found` — quando o livro não existe.
-
----
-
-## Resumo dos endpoints
-
-| Método   | Rota                       | Descrição                        |
-|----------|----------------------------|----------------------------------|
-| `POST`   | `/api/authors`             | Cadastrar autor                  |
-| `GET`    | `/api/authors`             | Listar todos os autores          |
-| `GET`    | `/api/authors/{id}`        | Buscar autor por ID              |
-| `PUT`    | `/api/authors/{id}`        | Atualizar autor                  |
-| `DELETE` | `/api/authors/{id}`        | Remover autor                    |
-| `GET`    | `/api/authors/{id}/books`  | Listar livros de um autor        |
-| `POST`   | `/api/books`               | Cadastrar livro                  |
-| `GET`    | `/api/books/{id}`          | Ver detalhes de um livro         |
-| `PUT`    | `/api/books/{id}`          | Alterar informações de um livro  |
-| `DELETE` | `/api/books/{id}`          | Remover um livro                 |
+Resposta `204 No Content`.

@@ -24,6 +24,12 @@ public class BookService {
         this.authorRepository = authorRepository;
     }
 
+    public List<BookResponse> listBooks() {
+        return bookRepository.findAll().stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     public BookResponse createBook(BookRequest request) {
         Book book = new Book();
         applyRequest(book, request);
